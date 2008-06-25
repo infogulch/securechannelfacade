@@ -14,8 +14,7 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.util.logging.Logger;
 
 /**
  * @author whaley
@@ -41,7 +40,8 @@ public class ScpFacade
     SCP_PROPERTIES.put("StrictHostKeyChecking", "No");
   }
   
-  protected final Log logger = LogFactory.getLog(this.getClass());
+  protected final Logger logger = 
+	  Logger.getLogger(this.getClass().getPackage().getName());
   String host;
   int port = 22;
   String username;
@@ -126,13 +126,14 @@ public class ScpFacade
       if (b == 1)
       {
         // error
-        logger.error("scp failed with an error - reason: " + sb.toString());
+        logger.severe("scp failed with an error - reason: " + sb.toString());
       }
       if (b == 2)
       {
         // fatal error
-        logger
-            .error("scp failed with a fatal error - reason: " + sb.toString());
+        logger.severe("scp failed with a fatal error - reason: " 
+        		+ sb.toString());
+            
       }
     }
     return b;
@@ -244,7 +245,7 @@ public class ScpFacade
         
         long timeInSeconds = (System.currentTimeMillis() - startTime) / 1000;
         logger.info("SUCCESS: scp file TO " + this.host + ":" + scpfile.getPath()
-            + " completed in " + Long.toString(timeInSeconds) + "seconds");
+            + " completed in " + Long.toString(timeInSeconds) + " seconds");
           
       }
       finally
@@ -261,7 +262,7 @@ public class ScpFacade
     }
     catch (Exception e)
     {
-      logger.error(e.getMessage());
+      logger.severe(e.getMessage());
     }
     
     
