@@ -5,6 +5,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 
 import com.jcraft.jsch.ChannelExec;
@@ -152,64 +154,58 @@ public class ScpFacade
     return session;
   }
   
-  /**
-   * 
-   * @param fileContents
-   *          The payload to be sent
-   * @param filePath
-   *          The path + filename of the file being sent.
-   * @param filessize
-   *          The number of bytes  of the file being sent
-   */
-  public void sendFile(InputStream fileStream, String filepath, 
-      long filesize) throws ScpException
-  { 
-    long startTime = System.currentTimeMillis();
-    
+  
+  private void scpFileThroughSshSession(ScpFile scpfile, Session sshSession) 
+  {
     logger.info("Attempting to scp file TO " +  this.username + "@" +this.host
-        + ":" + filepath + " with a file size of " + Long.toString(filesize) 
-        + " bytes");
+        + ":" + scpfile.getPath() + " with a file size of " + 
+        Long.toString(scpfile.getFileSize()) + " bytes");
     
-    Session sshSession = null;
     InputStream in = null;
     OutputStream out = null;
+    InputStream fileStream = null;
     ChannelExec channel = null;
 
+    
     try
     {
       try
       {
-        validateMembers();
-        final String cmd = SCP_UPLOAD_COMMAND + filepath;
-
-        sshSession = getJSchSession();
-        sshSession.connect();
+        long startTime = System.currentTimeMillis();
         
+        /*
+         * Establish a channel on the ssh session for scp'ing
+         */
+        final String cmd = SCP_UPLOAD_COMMAND + scpfile.getPath();
         channel = (ChannelExec) sshSession.openChannel("exec");
         channel.setCommand(cmd);
         channel.connect();
         
         /*
-         * Get io streams for the channel being used, and send commands and the
-         * file to the output stream while checking the input stream for
-         * validity
+         * Get io streams for the channel being used and an input stream 
+         * for the file being transferred
          */
+        fileStream = new FileInputStream(scpfile.getFile());
         in = channel.getInputStream();
         out = channel.getOutputStream();
-        
+
+        /*
+         * Check server acknowledgement of the channel
+         */
         if (checkAck(in) != 0)
         {
           throw new ScpException(
               "Scp upload to "
                   + this.host
                   + "failed.  Reason: Initializing session returned a status "
-                  +	"code other than 0");
+                  + "code other than 0");
         }
         
         /*
          * Send the file's size and file name before sending the file.
          */
-        String command = "C0644 " + filesize + " " + filepath + "\n";
+        String command = "C0644 " + Long.toString(scpfile.getFileSize()) + " " 
+          + scpfile.getPath() + "\n";
         out.write(command.getBytes());
         out.flush();
         
@@ -221,7 +217,7 @@ public class ScpFacade
         }
         
         /*
-         * Send the file contents over
+         * Send the file contents over.
          */
         byte[] buf = new byte[1024];
         while (true)
@@ -247,19 +243,60 @@ public class ScpFacade
         }
         
         long timeInSeconds = (System.currentTimeMillis() - startTime) / 1000;
-        logger.info("SUCCESS: scp file TO " + this.host + ":" + filepath
+        logger.info("SUCCESS: scp file TO " + this.host + ":" + scpfile.getPath()
             + " completed in " + Long.toString(timeInSeconds) + "seconds");
+          
       }
       finally
       {
-        if (channel != null)
-          channel.disconnect();
-        if (sshSession != null)
-          sshSession.disconnect();
         if (out != null)
           out.close();
         if (in != null)
           in.close();
+        if (fileStream != null)
+          fileStream.close();
+        if (channel != null)
+          channel.disconnect();
+      }
+    }
+    catch (Exception e)
+    {
+      logger.error(e.getMessage());
+    }
+    
+    
+  }
+  
+  /**
+   * 
+   * @param fileContents
+   *          The payload to be sent
+   * @param filePath
+   *          The path + filename of the file being sent.
+   * @param filessize
+   *          The number of bytes  of the file being sent
+   */
+  public void sendFiles(List<ScpFile> filelist) throws ScpException
+  { 
+    Session sshSession = null;
+    try
+    {
+      try
+      {
+        validateMembers();
+
+        sshSession = getJSchSession();
+        sshSession.connect();
+        
+        for (ScpFile scpFile : filelist)
+        {
+          scpFileThroughSshSession(scpFile,sshSession);
+        }
+      }
+      finally
+      {
+        if (sshSession != null)
+          sshSession.disconnect();
       }
     }
     catch (Exception e)
@@ -272,26 +309,9 @@ public class ScpFacade
   public void sendFile(final File file, final String filepath) 
   throws ScpException
   {  
-    InputStream in = null;
-    try
-    {
-      try
-      {
-        if (file != null && file.exists())
-        {
-          in = new FileInputStream(file);
-          sendFile(in, filepath, file.length());  
-        } 
-      }
-      finally
-      {
-        if (in != null) in.close();
-      }
-    }
-    catch (IOException e)
-    {
-      throw new ScpException(e);
-    }
+    List<ScpFile> scpFileList = 
+      Collections.singletonList(new ScpFile(file,filepath));
+    sendFiles(scpFileList);  
   }
   
 
