@@ -60,6 +60,9 @@ public class ScpFacade
   
   /**
    * Requires that setPassword or setPrivateKeyFile and usePrivateKey be called. 
+   * 
+   * @param host The remote server to scp the file to  
+   * @param username The username on the remote server
    */
   public ScpFacade(String host, String username)
   {
@@ -70,6 +73,10 @@ public class ScpFacade
   /**
    * Initializes an ScpFacade to use password based authentication.  sendFile
    * can be directly called after using this constructor.
+   *
+   * @param host The remote server to scp the file to  
+   * @param username The username on the remote server
+   * @param password password to authenticate the username with
    */
   public ScpFacade(String host, String username, String password)
   {
@@ -81,6 +88,10 @@ public class ScpFacade
   /**
    * Initializes an ScpFacade to use private key authentication.  sendFile
    * can be directly called after using this constructor.
+   * @param host The remote server to scp the file to  
+   * @param username The username on the remote server
+   * @param privateKeyFile File on the localhost machine used for 
+   * privatekey authentication
    */
   public ScpFacade(String host, String username, File privateKeyFile)
   {
@@ -92,10 +103,6 @@ public class ScpFacade
   
   /**
    * Checks the input stream from the ssh session for status codes.
-   * 
-   * @param in
-   * @return
-   * @throws IOException
    */
   private int checkAck(InputStream in) throws IOException
   {
@@ -264,18 +271,12 @@ public class ScpFacade
     {
       logger.severe(e.getMessage());
     }
-    
-    
   }
   
   /**
-   * 
-   * @param fileContents
-   *          The payload to be sent
-   * @param filePath
-   *          The path + filename of the file being sent.
-   * @param filessize
-   *          The number of bytes  of the file being sent
+   * Sends multiple files by accepting a List of ScpFile objects.  
+   * @param filelist List of ScpFiles to be sent
+   * @see ScpFile
    */
   public void sendFiles(List<ScpFile> filelist) throws ScpException
   { 
@@ -291,6 +292,7 @@ public class ScpFacade
         
         for (ScpFile scpFile : filelist)
         {
+          if (scpFile == null) continue;
           scpFileThroughSshSession(scpFile,sshSession);
         }
       }
@@ -307,6 +309,12 @@ public class ScpFacade
   }
   
 
+  /**
+   * Sends sends a file on the localhost to the specified remote server at
+   * the remote server's filepath.
+   * @param file File object that represents the payload to be transfered
+   * @param filepath String 
+   */
   public void sendFile(final File file, final String filepath) 
   throws ScpException
   {  
@@ -344,7 +352,8 @@ public class ScpFacade
   }
   
   /**
-   * 
+   * Sets the private key file by the path of the private key file.
+   * setUsePrivateKey must be set to true to use a private key 
    * @param privateKeyFileName
    */
   public void setPrivateKeyFile(String privateKeyFileName)
@@ -353,7 +362,8 @@ public class ScpFacade
   }
   
   /**
-   * 
+   * Sets the private key file 
+   * setUsePrivateKey must be set to true to use a private key 
    * @param privateKeyFile
    */
   public void setPrivateKeyFile(File privateKeyFile)
