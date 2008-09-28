@@ -26,7 +26,7 @@ public class ScpFacadeTest
       List<ScpFile> filelist = new ArrayList<ScpFile>();
       filelist.add(new ScpFile(sendfile1,"file1"));
       filelist.add(new ScpFile(sendfile2,"file2"));
-      scp.sendFiles(filelist);
+      scp.uploadFiles(filelist);
     }
     catch (ScpException e)
     {

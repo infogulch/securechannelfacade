@@ -168,7 +168,7 @@ public class ScpFacade
   }
   
   
-  private void scpFileThroughSshSession(final ScpFile scpfile, 
+  private void uploadFileThroughSshSession(final ScpFile scpfile, 
       final Session sshSession) throws ScpException
     
   {
@@ -289,7 +289,7 @@ public class ScpFacade
    * or if the ScpFacade class has been initialized improperly.
    * @see ScpFile
    */
-  public Map<ScpFile,String> sendFiles(List<ScpFile> filelist) throws ScpException
+  public Map<ScpFile,String> uploadFiles(List<ScpFile> filelist) throws ScpException
   { 
     Session sshSession = null;
     Map<ScpFile,String> returnMap = new HashMap<ScpFile,String>();
@@ -307,7 +307,7 @@ public class ScpFacade
           if (scpFile == null) continue;
           try
           {
-            scpFileThroughSshSession(scpFile,sshSession);
+            uploadFileThroughSshSession(scpFile,sshSession);
           }
           catch (ScpException e)
           {
@@ -341,12 +341,12 @@ public class ScpFacade
    * @param scpFile - scpFile representing the file/path to be sent 
    * @throws ScpException if there was a problem sending this single file
    */
-  public void sendFile(final ScpFile scpFile) 
+  public void uploadFile(final ScpFile scpFile) 
   throws ScpException
   {  
     List<ScpFile> scpFileList = 
       Collections.singletonList(scpFile);
-    Map<ScpFile,String> fileErrorMap = sendFiles(scpFileList);
+    Map<ScpFile,String> fileErrorMap = uploadFiles(scpFileList);
     if (fileErrorMap.size() > 0)
       throw new ScpException(fileErrorMap.get(scpFile));
   }  
