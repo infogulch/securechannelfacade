@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import com.jcraft.jsch.ChannelExec;
@@ -103,6 +105,9 @@ public class ScpFacade
   
   /**
    * Checks the input stream from the ssh session for status codes.
+   * @param in InputStream representing the ssh channel
+   * @return int representing the status code.  0 returned if succesful.  
+   * @throws IOException if there was a problem reading the InputStram
    */
   private int checkAck(InputStream in) throws IOException
   {
@@ -163,7 +168,9 @@ public class ScpFacade
   }
   
   
-  private void scpFileThroughSshSession(ScpFile scpfile, Session sshSession) 
+  private void scpFileThroughSshSession(final ScpFile scpfile, 
+      final Session sshSession) throws ScpException
+    
   {
     logger.info("Attempting to scp file TO " +  this.username + "@" +this.host
         + ":" + scpfile.getPath() + " with a file size of " + 
@@ -174,7 +181,6 @@ public class ScpFacade
     InputStream fileStream = null;
     ChannelExec channel = null;
 
-    
     try
     {
       try
@@ -251,9 +257,10 @@ public class ScpFacade
         }
         
         long timeInSeconds = (System.currentTimeMillis() - startTime) / 1000;
-        logger.info("SUCCESS: scp file TO " + this.host + ":" + scpfile.getPath()
-            + " completed in " + Long.toString(timeInSeconds) + " seconds");
-          
+        logger.info("SUCCESS: scp of file " + scpfile.getFile().getName() + 
+            " TO " + this.host + ":" + scpfile.getPath() + " completed in " 
+            +  Long.toString(timeInSeconds) + " seconds");
+                      
       }
       finally
       {
@@ -270,30 +277,48 @@ public class ScpFacade
     catch (Exception e)
     {
       logger.severe(e.getMessage());
+      throw new ScpException(e);      
     }
   }
   
   /**
    * Sends multiple files by accepting a List of ScpFile objects.  
    * @param filelist List of ScpFiles to be sent
+   * @throws ScpException if there was any Exception caused by an abrupt 
+   * end of the sshSession as opposed to individual sending file failures 
+   * or if the ScpFacade class has been initialized improperly.
    * @see ScpFile
    */
-  public void sendFiles(List<ScpFile> filelist) throws ScpException
+  public Map<ScpFile,String> sendFiles(List<ScpFile> filelist) throws ScpException
   { 
     Session sshSession = null;
+    Map<ScpFile,String> returnMap = new HashMap<ScpFile,String>();
     try
     {
       try
       {
         validateMembers();
-
+        
         sshSession = getJSchSession();
         sshSession.connect();
         
         for (ScpFile scpFile : filelist)
         {
           if (scpFile == null) continue;
-          scpFileThroughSshSession(scpFile,sshSession);
+          try
+          {
+            scpFileThroughSshSession(scpFile,sshSession);
+          }
+          catch (ScpException e)
+          {
+            /*
+             * Catch exceptions related only to sending individual files
+             * and just record the message potentially for output.  
+             * Otherwise, fail silently (logging occurs in the 
+             * scpFileThroughSshSession method).  These failures are ok.
+             */
+            returnMap.put(scpFile,e.getMessage());
+          }
         }
       }
       finally
@@ -306,23 +331,25 @@ public class ScpFacade
     {
       throw new ScpException(e);
     }
+    return returnMap;
   }
   
 
   /**
    * Sends sends a file on the localhost to the specified remote server at
    * the remote server's filepath.
-   * @param file File object that represents the payload to be transfered
-   * @param filepath String 
+   * @param scpFile - scpFile representing the file/path to be sent 
+   * @throws ScpException if there was a problem sending this single file
    */
-  public void sendFile(final File file, final String filepath) 
+  public void sendFile(final ScpFile scpFile) 
   throws ScpException
   {  
     List<ScpFile> scpFileList = 
-      Collections.singletonList(new ScpFile(file,filepath));
-    sendFiles(scpFileList);  
-  }
-  
+      Collections.singletonList(scpFile);
+    Map<ScpFile,String> fileErrorMap = sendFiles(scpFileList);
+    if (fileErrorMap.size() > 0)
+      throw new ScpException(fileErrorMap.get(scpFile));
+  }  
 
   /**
    * @param host
@@ -390,6 +417,11 @@ public class ScpFacade
     this.username = username;
   }
   
+  /**
+   * Validates all private members are set correctly before beginning
+   * transfer.
+   * @throws ScpException if members are not set appropriately.
+   */
   private void validateMembers() throws ScpException
   {
     if (this.host == null)

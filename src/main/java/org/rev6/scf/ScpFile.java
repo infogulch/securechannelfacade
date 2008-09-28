@@ -22,6 +22,11 @@ public class ScpFile
     }
   }
   
+  public ScpFile(final File file)
+  {
+    this(file,file.getName());
+  }
+  
   public File getFile()
   {
     return this.file;
