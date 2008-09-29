@@ -2,9 +2,11 @@ package org.rev6.scf;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -36,6 +38,7 @@ public class ScpFacade
 {
   
   private static final String SCP_UPLOAD_COMMAND = "scp -p -t ";
+  private static final String SCP_DOWNLOAD_COMMAND = "scp -f ";
   private static final Properties SCP_PROPERTIES = new Properties();
   static
   {
@@ -73,21 +76,6 @@ public class ScpFacade
   }
   
   /**
-   * Initializes an ScpFacade to use password based authentication.  sendFile
-   * can be directly called after using this constructor.
-   *
-   * @param host The remote server to scp the file to  
-   * @param username The username on the remote server
-   * @param password password to authenticate the username with
-   */
-  public ScpFacade(String host, String username, String password)
-  {
-    this.setHost(host);
-    this.setUsername(username);
-    this.setPassword(password);
-  }
-  
-  /**
    * Initializes an ScpFacade to use private key authentication.  sendFile
    * can be directly called after using this constructor.
    * @param host The remote server to scp the file to  
@@ -101,6 +89,21 @@ public class ScpFacade
     this.setUsername(username);
     this.setPrivateKeyFile(privateKeyFile);
     this.setUsePrivateKey(true);
+  }
+  
+  /**
+   * Initializes an ScpFacade to use password based authentication.  sendFile
+   * can be directly called after using this constructor.
+   *
+   * @param host The remote server to scp the file to  
+   * @param username The username on the remote server
+   * @param password password to authenticate the username with
+   */
+  public ScpFacade(String host, String username, String password)
+  {
+    this.setHost(host);
+    this.setUsername(username);
+    this.setPassword(password);
   }
   
   /**
@@ -151,6 +154,108 @@ public class ScpFacade
     return b;
   }
   
+  private ChannelExec connectToChannel(String cmd, Session sshSession)
+    throws JSchException
+  {
+    ChannelExec channel = (ChannelExec) sshSession.openChannel("exec");
+    channel.setCommand(cmd);
+    channel.connect();
+    return channel;
+  }
+  
+  private void downloadFileThroughSshSession(ScpFile scpFile, Session sshSession) throws ScpException
+  {
+    logger.info("Attempting to scp file FROM " +  this.username + "@" 
+        + this.host + ":" + scpFile.getRemotePath());
+    
+    InputStream in = null;
+    OutputStream out = null;
+    FileOutputStream fos = null;
+    ChannelExec channel = null;
+    try
+    {
+      try
+      {
+        /*
+         * Establish a channel on the ssh session for scp'ing
+         */
+        final String cmd = SCP_DOWNLOAD_COMMAND + scpFile.getRemotePath();
+        channel = connectToChannel(cmd,sshSession);
+        
+        /*
+         * Get io streams for the channel being used and an output stream 
+         * for the file to write to disk
+         */
+        fos = new FileOutputStream(scpFile.getLocalFile());
+        in = channel.getInputStream();
+        out = channel.getOutputStream();
+        
+        
+        sendAck(out);     
+//        
+//        byte[] buf = new byte[1024];
+//        in.read(buf);
+//        System.out.println(Arrays.toString(buf));
+        
+        
+        long fileSize = getFileSizeFromStream(in);
+        System.out.println(fileSize);
+        skipFileName(in);
+        sendAck(out);
+        writePayloadToFile(in,out,fos,fileSize);
+      }
+      finally
+      {
+        if (out != null)
+          out.close();
+        if (in != null)
+          in.close();
+        if (fos != null)
+          fos.close();
+        if (channel != null)
+          channel.disconnect();
+      }
+    }
+    catch (Exception e)
+    {
+      throw new ScpException(e);
+    }
+  }
+  
+  private long getFileSizeFromStream(InputStream in) 
+    throws ScpException,IOException
+  {
+    /*
+     * Receive file size from the server.
+     */
+    if (checkAck(in) != 'C')
+    {
+      throw new ScpException(
+          "Scp download from "
+              + this.host
+              + "failed.  Reason: Initial file size response returned a " 
+              + "status" +  "that is not 'C'"); 
+    }
+    in.skip(5); //receive the expected '0644 '
+    long filesize = 0L;
+    while(true)
+    {
+      int b = in.read(); 
+      if(b < 0)
+      {
+        throw new ScpException("Scp download from " 
+        + this.host
+        + "failed.  Reason: reading file size returned a response of " 
+        + "less than 0.");
+         
+      }
+      if(b == ' ')
+        break;
+      filesize = filesize * 10L + (long) (b - '0');
+    }
+    return filesize;
+  }
+  
   private Session getJSchSession() throws JSchException
   {
     JSch jsch = new JSch();
@@ -167,13 +272,224 @@ public class ScpFacade
     return session;
   }
   
+  private void sendAck(OutputStream out) throws IOException
+  {
+    out.write(0);
+    out.flush();
+  }
+  
+  /**
+   * @param host
+   *          The host a file is being copied to.
+   */
+  public void setHost(String host)
+  {
+    this.host = host;
+  }
+  
+  /**
+   * @param password
+   *          The password that will be used in ssh authentication.
+   */
+  public void setPassword(String password)
+  {
+    this.password = password;
+  }
+  
+  /**
+   * @param port
+   *          Sets the ssh port. Default is 22.
+   */
+  public void setPort(int port)
+  {
+    this.port = port;
+  }
+  
+  /**
+   * Sets the private key file 
+   * setUsePrivateKey must be set to true to use a private key 
+   * @param privateKeyFile
+   */
+  public void setPrivateKeyFile(File privateKeyFile)
+  {
+    this.privateKeyFile = privateKeyFile;
+  }
+  
+
+  /**
+   * Sets the private key file by the path of the private key file.
+   * setUsePrivateKey must be set to true to use a private key 
+   * @param privateKeyFileName
+   */
+  public void setPrivateKeyFile(String privateKeyFileName)
+  {
+    this.setPrivateKeyFile(new File(privateKeyFileName));
+  }  
+
+  /**
+   * Determines whether a private key is used or not when
+   * authenticating. Default is false.
+   * @param usePrivateKey
+   */
+  public void setUsePrivateKey(boolean usePrivateKey)
+  {
+    this.usePrivateKey = usePrivateKey;
+  }
+  
+  /**
+   * @param username
+   *          The username that will be used in ssh authentication.
+   */
+  public void setUsername(String username)
+  {
+    this.username = username;
+  }
+  
+  private void skipFileName(InputStream in) throws IOException
+  { 
+    for (int b = in.read(); b != '\n'; b = in.read()) 
+    { 
+      continue;
+    }
+  }
+  
+  
+  public Map<ScpFile,String> downloadFiles(final List<ScpFile> fileList)
+    throws ScpException
+  {
+    Session sshSession = null;
+    Map<ScpFile,String> returnMap = new HashMap<ScpFile,String>();
+    try
+    {
+      try
+      {
+        validateMembers();
+        sshSession = getJSchSession();
+        sshSession.connect();
+        
+        for (ScpFile scpFile : fileList)
+        {
+          if (scpFile == null) 
+          {
+            logger.info("Null ScpFile reference found.  Ignoring.");
+            continue;
+          }
+          try
+          {
+            downloadFileThroughSshSession(scpFile,sshSession);
+          }
+          catch (ScpException e)
+          {
+            /*
+             * Catch exceptions related only to sending individual files
+             * and just record the message potentially for output.  
+             * Otherwise, fail silently (logging occurs in the 
+             * scpFileThroughSshSession method).  These failures are meant
+             * to not be thrown to the client, but handled by looking at 
+             * the return Map.
+             */
+            returnMap.put(scpFile,e.getMessage());
+          }
+        }
+      }
+      finally
+      {
+        if (sshSession != null)
+          sshSession.disconnect();
+      }
+    }
+    catch (Exception e)
+    {
+      throw new ScpException(e);
+    }
+    return returnMap;
+  }
+  
+  public void downloadFile(final ScpFile scpFile) throws ScpException
+  {
+    List<ScpFile> scpFileList = 
+      Collections.singletonList(scpFile);
+    Map<ScpFile,String> fileErrorMap = downloadFiles(scpFileList);
+    if (fileErrorMap.size() > 0)
+      throw new ScpException(fileErrorMap.get(scpFile));
+  }
+  
+  /**
+   * Sends sends a file on the localhost to the specified remote server at
+   * the remote server's filepath.
+   * @param scpFile - scpFile representing the file/path to be sent 
+   * @throws ScpException if there was a problem sending this single file
+   */
+  public void uploadFile(final ScpFile scpFile) 
+  throws ScpException
+  {  
+    List<ScpFile> scpFileList = 
+      Collections.singletonList(scpFile);
+    Map<ScpFile,String> fileErrorMap = uploadFiles(scpFileList);
+    if (fileErrorMap.size() > 0)
+      throw new ScpException(fileErrorMap.get(scpFile));
+  }
+  
+  /**
+   * Sends multiple files by accepting a List of ScpFile objects.  
+   * @param fileList List of ScpFiles to be sent
+   * @throws ScpException if there was any Exception caused by an abrupt 
+   * end of the sshSession as opposed to individual sending file failures 
+   * or if the ScpFacade class has been initialized improperly.
+   * @see ScpFile
+   */
+  public Map<ScpFile,String> uploadFiles(final List<ScpFile> fileList) 
+    throws ScpException
+  { 
+    Session sshSession = null;
+    Map<ScpFile,String> returnMap = new HashMap<ScpFile,String>();
+    try
+    {
+      try
+      {
+        validateMembers();
+        
+        sshSession = getJSchSession();
+        sshSession.connect();
+        
+        for (ScpFile scpFile : fileList)
+        {
+          if (scpFile == null) continue;
+          try
+          {
+            uploadFileThroughSshSession(scpFile,sshSession);
+          }
+          catch (ScpException e)
+          {
+            /*
+             * Catch exceptions related only to sending individual files
+             * and just record the message potentially for output.  
+             * Otherwise, fail silently (logging occurs in the 
+             * scpFileThroughSshSession method).  These failures are ok.
+             */
+            returnMap.put(scpFile,e.getMessage());
+          }
+        }
+      }
+      finally
+      {
+        if (sshSession != null)
+          sshSession.disconnect();
+      }
+    }
+    catch (Exception e)
+    {
+      throw new ScpException(e);
+    }
+    return returnMap;
+  }
   
   private void uploadFileThroughSshSession(final ScpFile scpfile, 
       final Session sshSession) throws ScpException
     
   {
     logger.info("Attempting to scp file TO " +  this.username + "@" +this.host
-        + ":" + scpfile.getPath() + " with a file size of " + 
+        + ":" + scpfile.getRemotePath() + " with a file size of " + 
         Long.toString(scpfile.getFileSize()) + " bytes");
     
     InputStream in = null;
@@ -190,21 +506,19 @@ public class ScpFacade
         /*
          * Establish a channel on the ssh session for scp'ing
          */
-        final String cmd = SCP_UPLOAD_COMMAND + scpfile.getPath();
-        channel = (ChannelExec) sshSession.openChannel("exec");
-        channel.setCommand(cmd);
-        channel.connect();
+        final String cmd = SCP_UPLOAD_COMMAND + scpfile.getRemotePath();
+        channel = connectToChannel(cmd,sshSession);
         
         /*
          * Get io streams for the channel being used and an input stream 
          * for the file being transferred
          */
-        fileStream = new FileInputStream(scpfile.getFile());
+        fileStream = new FileInputStream(scpfile.getLocalFile());
         in = channel.getInputStream();
         out = channel.getOutputStream();
 
         /*
-         * Check server acknowledgement of the channel
+         * Send Acknowledgement to the server
          */
         if (checkAck(in) != 0)
         {
@@ -219,7 +533,7 @@ public class ScpFacade
          * Send the file's size and file name before sending the file.
          */
         String command = "C0644 " + Long.toString(scpfile.getFileSize()) + " " 
-          + scpfile.getPath() + "\n";
+          + scpfile.getRemotePath() + "\n";
         out.write(command.getBytes());
         out.flush();
         
@@ -257,10 +571,9 @@ public class ScpFacade
         }
         
         long timeInSeconds = (System.currentTimeMillis() - startTime) / 1000;
-        logger.info("SUCCESS: scp of file " + scpfile.getFile().getName() + 
-            " TO " + this.host + ":" + scpfile.getPath() + " completed in " 
-            +  Long.toString(timeInSeconds) + " seconds");
-                      
+        logger.info("SUCCESS: scp of file " + scpfile.getLocalFile().getName() + 
+            " TO " + this.host + ":" + scpfile.getRemotePath() + " completed in " 
+            +  Long.toString(timeInSeconds) + " seconds");           
       }
       finally
       {
@@ -279,142 +592,6 @@ public class ScpFacade
       logger.severe(e.getMessage());
       throw new ScpException(e);      
     }
-  }
-  
-  /**
-   * Sends multiple files by accepting a List of ScpFile objects.  
-   * @param filelist List of ScpFiles to be sent
-   * @throws ScpException if there was any Exception caused by an abrupt 
-   * end of the sshSession as opposed to individual sending file failures 
-   * or if the ScpFacade class has been initialized improperly.
-   * @see ScpFile
-   */
-  public Map<ScpFile,String> uploadFiles(List<ScpFile> filelist) throws ScpException
-  { 
-    Session sshSession = null;
-    Map<ScpFile,String> returnMap = new HashMap<ScpFile,String>();
-    try
-    {
-      try
-      {
-        validateMembers();
-        
-        sshSession = getJSchSession();
-        sshSession.connect();
-        
-        for (ScpFile scpFile : filelist)
-        {
-          if (scpFile == null) continue;
-          try
-          {
-            uploadFileThroughSshSession(scpFile,sshSession);
-          }
-          catch (ScpException e)
-          {
-            /*
-             * Catch exceptions related only to sending individual files
-             * and just record the message potentially for output.  
-             * Otherwise, fail silently (logging occurs in the 
-             * scpFileThroughSshSession method).  These failures are ok.
-             */
-            returnMap.put(scpFile,e.getMessage());
-          }
-        }
-      }
-      finally
-      {
-        if (sshSession != null)
-          sshSession.disconnect();
-      }
-    }
-    catch (Exception e)
-    {
-      throw new ScpException(e);
-    }
-    return returnMap;
-  }
-  
-
-  /**
-   * Sends sends a file on the localhost to the specified remote server at
-   * the remote server's filepath.
-   * @param scpFile - scpFile representing the file/path to be sent 
-   * @throws ScpException if there was a problem sending this single file
-   */
-  public void uploadFile(final ScpFile scpFile) 
-  throws ScpException
-  {  
-    List<ScpFile> scpFileList = 
-      Collections.singletonList(scpFile);
-    Map<ScpFile,String> fileErrorMap = uploadFiles(scpFileList);
-    if (fileErrorMap.size() > 0)
-      throw new ScpException(fileErrorMap.get(scpFile));
-  }  
-
-  /**
-   * @param host
-   *          The host a file is being copied to.
-   */
-  public void setHost(String host)
-  {
-    this.host = host;
-  }
-  
-  /**
-   * @param password
-   *          The password that will be used in ssh authentication.
-   */
-  public void setPassword(String password)
-  {
-    this.password = password;
-  }
-  
-  /**
-   * @param port
-   *          Sets the ssh port. Default is 22.
-   */
-  public void setPort(int port)
-  {
-    this.port = port;
-  }
-  
-  /**
-   * Sets the private key file by the path of the private key file.
-   * setUsePrivateKey must be set to true to use a private key 
-   * @param privateKeyFileName
-   */
-  public void setPrivateKeyFile(String privateKeyFileName)
-  {
-    this.setPrivateKeyFile(new File(privateKeyFileName));
-  }
-  
-  /**
-   * Sets the private key file 
-   * setUsePrivateKey must be set to true to use a private key 
-   * @param privateKeyFile
-   */
-  public void setPrivateKeyFile(File privateKeyFile)
-  {
-    this.privateKeyFile = privateKeyFile;
-  }
-  
-  /**
-   * Determines whether a private key is used or not when
-   * authenticating. Default is false.
-   * @param usePrivateKey
-   */
-  public void setUsePrivateKey(boolean usePrivateKey)
-  {
-    this.usePrivateKey = usePrivateKey;
-  }
-  
-  /**
-   * @param username
-   *          The username that will be used in ssh authentication.
-   */
-  public void setUsername(String username)
-  {
-    this.username = username;
   }
   
   /**
@@ -442,5 +619,30 @@ public class ScpFacade
         throw new ScpException("password not set.  " + "setPassword must be "
             + "called before calling sendFile");
     }
+  }
+  
+  private void writePayloadToFile(InputStream in, OutputStream out, 
+      FileOutputStream fos, long fileSize) throws ScpException,IOException
+  {
+    byte[] inBuffer = new byte[1024];
+    int readSize;
+    while (true)
+    {
+      if (inBuffer.length < fileSize)
+        readSize = inBuffer.length;
+      else
+        readSize = (int) fileSize;
+      int bytesRead = in.read(inBuffer,0,readSize);
+      if (bytesRead < 0)
+      {
+        throw new ScpException("Scp download from "
+        + this.host
+        + "failed.  Reason: Unable to download payload of file ");
+      }
+      System.out.println(Arrays.toString(inBuffer));
+      fos.write(inBuffer, 0, bytesRead);
+      fileSize -= bytesRead;
+      if (fileSize == 0L) break;
+    }        
   }
 }

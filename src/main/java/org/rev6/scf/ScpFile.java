@@ -2,23 +2,22 @@ package org.rev6.scf;
 
 import java.io.File;
 
-
 public class ScpFile
 {
-  private final File file;
-  private final String path;
+  private final File localFile;
+  private final String remotePath;
   
-  public ScpFile(final File file, final String path)
+  public ScpFile(final File localFile, final String remotePath)
   {
-    if (file == null || path == null) throw new 
-      IllegalArgumentException("File reference and path must be non-null"); 
-    else if (!file.exists())
-      throw new IllegalArgumentException("The file reference " + 
-          file.getAbsolutePath()+ " must actually be a file that exists.");
+    if (localFile == null || remotePath == null) 
+    {
+      throw new IllegalArgumentException("File reference and path must " +
+      		"be non-null"); 
+    }
     else
     {
-      this.file = file;
-      this.path = path;
+      this.localFile = localFile;
+      this.remotePath = remotePath;
     }
   }
   
@@ -27,18 +26,18 @@ public class ScpFile
     this(file,file.getName());
   }
   
-  public File getFile()
+  public File getLocalFile()
   {
-    return this.file;
+    return this.localFile;
   }
   
-  public String getPath()
+  public String getRemotePath()
   {
-    return this.path;
+    return this.remotePath;
   }
   
   public long getFileSize()
   {
-    return this.file.length();
+    return this.localFile.length();
   }
 }
