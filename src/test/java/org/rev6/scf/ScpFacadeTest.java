@@ -28,7 +28,7 @@ public class ScpFacadeTest
       filelist.add(new ScpFile(sendfile2,"file2"));
       scp.uploadFiles(filelist);
     }
-    catch (ScpException e)
+    catch (SshException e)
     {
     	e.printStackTrace();
     }
