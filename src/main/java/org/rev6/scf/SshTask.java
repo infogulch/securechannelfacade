@@ -2,6 +2,7 @@ package org.rev6.scf;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.logging.Logger;
 
 import com.jcraft.jsch.ChannelExec;
@@ -59,6 +60,12 @@ public abstract class SshTask
     return b;
   }
 
+  
+  void sendAck(OutputStream out) throws IOException
+  {
+    out.write(0);
+    out.flush();
+  }
   
   ChannelExec connectToChannel(Session sshSession, String cmd)
     throws JSchException

@@ -9,6 +9,26 @@ import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 
+
+/**
+ * 
+ * 
+ * SshConnection is an abstraction of a JSch Session which handles 
+ * the establishment of an ssh connection to a remote server.  
+ * <p>
+ * Once connect() has been successfully called, any number of SshTask's
+ * can be run by calling the execute method until disconnect() is called.
+ * <p>
+ * It works with username/password authentication or ssh2 username/private key
+ * authentication.
+ * <p>
+ * The default port of 22 is always used unless explicitly set via the setPort
+ * method.
+ * <p>
+ * For more information on JSch, please see http://www.jcraft.com/jsch/ 
+ * 
+ * @author whaley
+ */
 public class SshConnection
 {
   private static final Properties SSH_PROPERTIES = new Properties();
