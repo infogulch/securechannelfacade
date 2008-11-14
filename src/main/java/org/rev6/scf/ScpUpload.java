@@ -142,6 +142,6 @@ public class ScpUpload extends SshTask
       + this.scpFile.getLocalFile().getAbsolutePath() + " to "
       + this.scpFile.getRemotePath() + " at a remote host.";
     }
-    return this.getClass().getName() + " Task: scpFile property is null";
+    return this.getClass().getName() + " Task: scpFile property is null.";
   }
 }
