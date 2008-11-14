@@ -127,6 +127,10 @@ public class ScpUpload extends SshTask
   
   public void setScpFile(ScpFile scpFile)
   {
+    if (scpFile == null)
+    {
+      throw new IllegalArgumentException("scpFile can't be null");
+    }
     this.scpFile = scpFile;
   }
   
