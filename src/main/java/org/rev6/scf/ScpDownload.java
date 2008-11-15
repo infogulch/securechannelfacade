@@ -8,7 +8,11 @@ import java.io.OutputStream;
 import com.jcraft.jsch.ChannelExec;
 import com.jcraft.jsch.Session;
 
-
+/**
+ * SshTask for simulating an scp from a remote server.  A valid ScpFile 
+ * must be passed in either during construction or via the set
+ * @author jwhaley
+ */
 public class ScpDownload extends SshTask
 {
   private static final String SCP_DOWNLOAD_COMMAND = "scp -f ";
@@ -135,5 +139,14 @@ public class ScpDownload extends SshTask
       
       if (fileSize == 0L) break;
     }        
+  }
+  
+  public void setScpFile(ScpFile scpFile)
+  {
+    if (scpFile == null)
+    {
+      throw new IllegalArgumentException("scpFile can't be null");
+    }
+    this.scpFile = scpFile;
   }
 }
