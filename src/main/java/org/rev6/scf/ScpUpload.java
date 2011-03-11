@@ -36,7 +36,7 @@ public class ScpUpload extends SshTask {
 
         try {
             try {
-                final String cmd = SCP_UPLOAD_COMMAND + this.scpFile.getRemotePath();
+                final String cmd = SCP_UPLOAD_COMMAND + this.scpFile.getRemoteDirectory();
 
                 channel = this.setUpChannel(sshSession, cmd);
                 fis = new FileInputStream(scpFile.getLocalFile());
@@ -87,7 +87,7 @@ public class ScpUpload extends SshTask {
     private void sendFileSizeAndRemotePath(final ScpFile scpfile,
                                            final OutputStream out) throws IOException {
         String command = "C0644 " + Long.toString(scpfile.getFileSize()) + " "
-                + scpfile.getRemotePath() + "\n";
+                + scpfile.getRemoteFilename() + "\n";
         out.write(command.getBytes());
         out.flush();
     }
@@ -113,11 +113,13 @@ public class ScpUpload extends SshTask {
         this.scpFile = scpFile;
     }
 
+
+
     public String toString() {
         if (this.scpFile != null) {
             return this.getClass().getName() + " Task: "
                     + this.scpFile.getLocalFile().getAbsolutePath() + " to "
-                    + this.scpFile.getRemotePath() + " at a remote host.";
+                    + this.scpFile.getRemoteDirectory() + this.scpFile.getRemoteFilename()  +" at a remote host.";
         }
         return this.getClass().getName() + " Task: scpFile property is null.";
     }

@@ -37,7 +37,7 @@ public class ScpDownload extends SshTask {
         try {
             try {
                 long fileSize;
-                String cmd = SCP_DOWNLOAD_COMMAND + this.scpFile.getRemotePath();
+                String cmd = SCP_DOWNLOAD_COMMAND + this.scpFile.getRemoteFullPath();
 
                 channel = setUpChannel(sshSession, cmd);
                 fos = new FileOutputStream(scpFile.getLocalFile());

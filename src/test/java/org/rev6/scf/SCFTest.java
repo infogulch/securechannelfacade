@@ -18,6 +18,7 @@ public class SCFTest {
 
 
     public static void main(String[] args) throws Exception {
+
         /*SshConnection sshConnection = new SshConnection(
                 HOST, USER, PASSWORD); */ //Uses Password
         SshConnection sshConnection = new SshConnection(
@@ -27,11 +28,11 @@ public class SCFTest {
 
         ScpDownload download = new ScpDownload(new ScpFile(new File(LOCAL_PATH),
                 REMOTE_PATH));
-        ScpUpload upload = new ScpUpload(new ScpFile(new File(REMOTE_PATH)));
+        ScpUpload upload = new ScpUpload(new ScpFile(new File(LOCAL_PATH),REMOTE_PATH));
         SshCommand command = new SshCommand("ls");
 
-        sshConnection.executeTask(download);
         sshConnection.executeTask(upload);
+        sshConnection.executeTask(download);
         sshConnection.executeTask(command);
 
         sshConnection.disconnect();
