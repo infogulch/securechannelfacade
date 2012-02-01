@@ -42,6 +42,7 @@ public class SshConnection {
     String password;
     File privateKeyFile;
     boolean usePrivateKey = false;
+    HostKey[] hostKeys = null;
 
     Session sshSession;
 
@@ -118,6 +119,13 @@ public class SshConnection {
 
         try {
             JSch jsch = new JSch();
+
+            if (hostKeys != null)
+            {
+                HostKeyRepository hkr = jsch.getHostKeyRepository();
+                for (int i = 0; i < hostKeys.length; i++)
+                    hkr.add(hostKeys[i], null);
+            }
 
             validateMembers();
 
@@ -263,6 +271,22 @@ public class SshConnection {
     public void setUsername(String username) {
         exceptIfAlreadyConnected();
         this.username = username;
+    }
+    
+    /**
+     * @param yes Whether to set StrictHostKeyChecking to yes or no
+     */
+    public void setStrictHostKeyChecking(boolean yes)
+    {
+        if (yes)
+            SSH_PROPERTIES.put("StrictHostKeyChecking", "yes");
+        else
+            SSH_PROPERTIES.put("StrictHostKeyChecking", "no");
+    }
+    
+    public void setHostKeys(HostKey[] hostKeys)
+    {
+        this.hostKeys = hostKeys;
     }
 
     /**
